@@ -1,14 +1,15 @@
 // Core
-import React, { Component } from 'react';
+import React, { Component } from "react";
 
 // Imstruments
-import { withSvg } from 'instruments/withSvg';
+import { withSvg } from "instruments/withSvg";
 
 class Edit extends Component {
     render () {
         const { hover, checked, color1, color2 } = this.props;
 
         const fill = checked || hover ? color1 : color2;
+
         return (
             <g>
                 <path
