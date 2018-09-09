@@ -119,10 +119,11 @@ export default class Task extends PureComponent {
                         color1 = '#3B8EF3'
                         color2 = '#FFF'
                         onClick = { this._toggleTaskCompletedState }
+                        inlineBlock = {true}
                     />
                     <input
                         disabled = { !isTaskEditing }
-                        maxLength = '50'
+                        maxLength = {50}
                         onChange = { this._updateNewTaskMessage }
                         onKeyDown = { this._updateTaskMessageOnKeyDown }
                         ref = { this.taskInput }
@@ -136,7 +137,7 @@ export default class Task extends PureComponent {
                         className = { Styles.toggleTaskFavoriteState }
                         color1 = '#3B8EF3'
                         color2 = '#000'
-                        inlineBlock
+                        inlineBlock = {true}
                         onClick = { this._toggleTaskFavoriteState }
                     />
                     <Edit
