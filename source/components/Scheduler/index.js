@@ -5,7 +5,7 @@ import Task from "../../components/Task";
 import Spinner from "../../components/Spinner";
 // Instruments
 import Styles from "./styles.m.css";
-import { BaseTaskModel } from "../../instruments/helpers";
+
 import { api } from "../../REST"; // ! Импорт модуля API должен иметь именно такой вид (import { api } from '../../REST')
 import FlipMove from "react-flip-move";
 
@@ -13,116 +13,149 @@ import Checkbox from "../../theme/assets/Checkbox";
 import { sortTasksByGroup } from "../../instruments/helpers";
 
 export default class Scheduler extends Component {
+
     state = {
         tasks:           [],
         newTaskMessage:  "",
         tasksFilter:     "",
         isTasksFetching: false,
     };
+
     componentDidMount () {
         this._fetchTasksAsync();
     }
 
     _updateTasksFilter = (event) => {
+        const updatedTasksFilter = event.target.value;
+
         this.setState({
-            tasksFilter: event.target.value.toLowerCase(),
+            tasksFilter: updatedTasksFilter ? updatedTasksFilter.toLowerCase() : null,
         });
     };
+
     _setTasksFetchingState = (state) => {
         this.setState({
             isTasksFetching: state,
         });
     };
+
     _updateNewTaskMessage = (event) => {
+        const enterKey = event.key ==='Enter';
+
+        if (enterKey) {
+            this._createTaskAsync(event);
+
+            return;
+        }
+
         this.setState({
             newTaskMessage: event.target.value,
         });
     };
+
     _fetchTasksAsync = async () => {
         this._setTasksFetchingState(true);
         const tasks = await api.fetchTasks();
 
         this.setState({
-            tasks:           sortTasksByGroup(tasks),
-            isTasksFetching: false,
+            tasks: sortTasksByGroup(tasks),
         });
+        this._setTasksFetchingState(false);
     };
-    _createTaskAsync = async (newTaskMessage) => {
-        this._setTasksFetchingState(true);
-        const task = await api.createTask(newTaskMessage);
 
-        this.setState(({ tasks }) => ({
-            tasks:           sortTasksByGroup([task, ...tasks]),
-            isTasksFetching: false,
-        }));
-    };
-    _removeTaskAsync = async (id) => {
-        this._setTasksFetchingState(true);
-        const task = await api.removeTask(id);
-
-        this.setState(({ tasks }) => ({
-            tasks: tasks.filter((task) => {
-                return task.id !== id;
-            }),
-            isTasksFetching: false,
-        }));
-    };
-    _updateTaskAsync = async (model) => {
-        const { tasks } = this.state;
-
-        this._setTasksFetchingState(true);
-        const update_task = await api.updateTask(model);
-
-        this.setState(({ tasks }) => ({
-            tasks: sortTasksByGroup(
-                tasks.map(
-                    (task) => task.id === update_task.id ? update_task : task
-                )
-            ),
-            isTasksFetching: false,
-        }));
-    };
-    _handleSubmit = (event) => {
+    _createTaskAsync = async (event) => {
         event.preventDefault();
-        this._submitTask();
-    };
-    _submitTask = () => {
         const { newTaskMessage } = this.state;
 
         if (!newTaskMessage) {
             return null;
         }
-        this._createTaskAsync(newTaskMessage);
-        this.setState({
-            newTaskMessage: "",
-        });
-    };
-    _submitOnEnter = (event) => {
-        const enterKey = event.key === "Enter";
 
-        if (enterKey) {
-            event.preventDefault();
-            this._submitTask();
+        this._setTasksFetchingState(true);
+        const task = await api.createTask(newTaskMessage);
+
+        if (task !== null) {
+            const newTask = { ...task };
+
+            this.setState(({ tasks }) => ({
+                tasks: [newTask, ...tasks],
+            }));
         }
+
+        this.setState({
+            newTaskMessage: '',
+        });
+        this._setTasksFetchingState(false);
     };
+
+    _removeTaskAsync = async (id) => {
+        this._setTasksFetchingState(true);
+
+        const res = await api.removeTask(id);
+
+        if (res===undefined) {
+            this.setState(({ tasks }) => ({
+                tasks: tasks.filter((task) => task.id !== id
+                ),
+            }));
+        }
+        this._setTasksFetchingState(false);
+    };
+
+    _updateTaskAsync = async (model) => {
+        const { tasks } = this.state;
+
+        this._setTasksFetchingState(true);
+        const updatedTask = await api.updateTask(model);
+
+        this.setState(({ tasks }) => ({
+            tasks: sortTasksByGroup(
+                tasks.map(
+                    (task) => task.id === updatedTask.id ? updatedTask : task
+                )
+            ),
+        }));
+        this._setTasksFetchingState(false);
+    };
+
     _getAllCompleted = () => {
         const { tasks } = this.state;
 
         return tasks.every((task) => task.completed);
     };
+
     _completeAllTasksAsync = async () => {
         const { tasks } = this.state;
+        const allTasksCompleted = this._getAllCompleted();
 
-        if (this._getAllCompleted()) {
+        if (allTasksCompleted) {
             return null;
         }
-        this._setTasksFetchingState(true);
-        const res = await api.completeAllTasks(tasks);
 
-        this.setState({
-            tasks:           res,
-            isTasksFetching: false,
+        this._setTasksFetchingState(true);
+        const uncompletedTasks = tasks.filter((task) => {
+            if (!task.completed) {
+                task.completed = !task.completed;
+
+                return task;
+            }
         });
+        const result = await api.completeAllTasks(uncompletedTasks);
+
+        if (result === undefined) {
+            const tasksComplited = tasks.map((task) => {
+                return uncompletedTasks.find((uncompletedTask) => uncompletedTask.id === task.id) || task;
+            });
+
+            const sortedTasks = sortTasksByGroup(tasksComplited);
+
+            this.setState({
+                tasks:           sortedTasks,
+                isTasksFetching: false,
+            });
+        } else {
+            return null;
+        }
     };
     render () {
         const {
@@ -133,19 +166,20 @@ export default class Scheduler extends Component {
         } = this.state;
         const allTasksChecked = this._getAllCompleted();
 
-        const tasksFilterArray = tasks.filter((task) =>
-            task.message.toLowerCase().includes(tasksFilter)
-        );
-        const tasksJSX = tasksFilterArray.map((task) => {
-            return (
-                <Task
-                    key = { task.id }
-                    { ...task }
-                    _removeTaskAsync = { this._removeTaskAsync }
-                    _updateTaskAsync = { this._updateTaskAsync }
-                />
-            );
-        });
+        const tasksJSX = tasks
+            .filter((task) =>
+                task.message.toLowerCase().includes(tasksFilter)
+            )
+            .map((task) => {
+                return (
+                    <Task
+                        key = { task.id }
+                        { ...task }
+                        _removeTaskAsync = { this._removeTaskAsync }
+                        _updateTaskAsync = { this._updateTaskAsync }
+                    />
+                );
+            });
 
         return (
             <section className = { Styles.scheduler }>
@@ -161,22 +195,21 @@ export default class Scheduler extends Component {
                         />
                     </header>
                     <section>
-                        <form onSubmit = { this._handleSubmit }>
+                        <form
+                            onSubmit = { this._createTaskAsync }>
                             <input
-                                maxLength = '50'
-                                onChange = { this._updateNewTaskMessage }
-                                onKeyPress = { this._submitOnEnter }
-                                placeholder = 'Описание моей новой задачи'
+                                className = 'createTask'
+                                maxLength = { 50 }
+                                placeholder = 'Описaние моей новой задачи'
                                 type = 'text'
                                 value = { newTaskMessage }
+                                onChange = { this._updateNewTaskMessage }
                             />
                             <button>Добавить задачу</button>
                         </form>
-                        <div>
+                        <div className = { Styles.overlay }>
                             <ul>
-                                <div>
-                                    <FlipMove>{tasksJSX}</FlipMove>
-                                </div>
+                                <FlipMove duration = { 400 }>{tasksJSX}</FlipMove>
                             </ul>
                         </div>
                     </section>

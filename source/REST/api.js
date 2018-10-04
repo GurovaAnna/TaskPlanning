@@ -6,18 +6,20 @@ export const api = {
         const response = await fetch(MAIN_URL, {
             method:  "GET",
             headers: {
-                Authorization: TOKEN,
+                'Content-Type': 'application/json',
+                Authorization:  TOKEN,
             },
         });
 
-        const { data: task } = await response.json();
-
         if (response.status !== 200) {
+
             throw new Error("Tasks were not fetched");
         }
+        const { data: task } = await response.json();
 
         return task;
     },
+
     createTask: async (message) => {
         const response = await fetch(MAIN_URL, {
             method:  "POST",
@@ -28,14 +30,14 @@ export const api = {
             body: JSON.stringify({ message }),
         });
 
-        const { data: task } = await response.json();
-
         if (response.status !== 200) {
             throw new Error("Task was not created");
         }
+        const { data: task } = await response.json();
 
         return task;
     },
+
     updateTask: async (model) => {
         const response = await fetch(MAIN_URL, {
             method:  "PUT",
@@ -56,6 +58,7 @@ export const api = {
 
         return task;
     },
+
     removeTask: async (id) => {
         const response = await fetch(`${MAIN_URL}/${id}`, {
             method:  "DELETE",
@@ -68,42 +71,26 @@ export const api = {
             throw new Error("Task was not deleted");
         }
     },
+
     completeAllTasks: async (tasks) => {
-        const new_array = [];
+        const requests = tasks.map((task) => {
+            return fetch(MAIN_URL,{
+                method:'PUT',
+                headers:{
+                    'Content-Type':'application/json',
+                    Authorization:TOKEN
+                },
+                body: JSON.stringify([task])
+            });
 
-        tasks.map((task) => {
-            new_array.push(
-                fetch(MAIN_URL, {
-                    method:  "PUT",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization:  TOKEN,
-                    },
-                    body: JSON.stringify([
-                        Object.assign({}, task, { completed: true })
-                    ]),
-                })
-            );
         });
-        if (
-            !(await Promise.all(new_array)).every(
-                (response) => response.status === 200
-            )
-        ) {
-            throw new Error("Tasks were not changed");
-        } else {
-            const res = await api.fetchTasks();
 
-            return res;
-        }
+        
+return Promise.all(requests).then((responses) => {
+            const result = responses.every((response) => response.status === 200);
 
-        //     let [...tasks] = await Promise.all(new_array);
-        //     let t=[];
-        //     tasks.map((task)=>{
-        //        task.json().then(res=>t.push(res.data[0]))
-
-        //     })
-
-        //   return t
+            !result ? false : '';
+        });
     },
+
 };
